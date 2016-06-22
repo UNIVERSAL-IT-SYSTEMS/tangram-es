@@ -19,6 +19,7 @@
 #include "gl.h"
 #include "gl/hardware.h"
 #include "util/ease.h"
+#include "util/jobQueue.h"
 #include "debug/textDisplay.h"
 #include "debug/frameInfo.h"
 
@@ -39,8 +40,6 @@ void Map::clearEase(EaseField _f) {
 }
 
 static std::bitset<8> g_flags = 0;
-std::mutex g_tasksMutex;
-std::queue<std::function<void()>> g_tasks;
 
 Map::Map(const char* _scenePath) {
 
@@ -156,6 +155,8 @@ bool Map::update(float _dt) {
 
     FrameInfo::beginUpdate();
 
+    JobQueue::runJobsForCurrentThread();
+
     m_scene->updateTime(_dt);
 
     bool viewComplete = true;
@@ -170,21 +171,6 @@ bool Map::update(float _dt) {
     m_inputHandler->update(_dt);
 
     m_view->update();
-
-    size_t nTasks = 0;
-    {
-        std::lock_guard<std::mutex> lock(g_tasksMutex);
-        nTasks = g_tasks.size();
-    }
-    while (nTasks-- > 0) {
-        std::function<void()> task;
-        {
-            std::lock_guard<std::mutex> lock(g_tasksMutex);
-            task = g_tasks.front();
-            g_tasks.pop();
-        }
-        task();
-    }
 
     for (const auto& style : m_scene->styles()) {
         style->onBeginUpdate();
@@ -533,16 +519,6 @@ const std::vector<TouchItem>& Map::pickFeaturesAt(float _x, float _y) {
     return m_labels->getFeaturesAtPoint(*m_view, 0, m_scene->styles(),
                                         m_tileManager->getVisibleTiles(),
                                         _x, _y);
-}
-
-void runOnMainLoop(std::function<void()> _task) {
-    std::lock_guard<std::mutex> lock(g_tasksMutex);
-    g_tasks.emplace(std::move(_task));
-    // FIXME: The collection of tasks should be a mapping from thread IDs to lists of tasks;
-    // Any resources that need to be disposed on a GL thread can store the ID of the thread
-    // that they are created on, then pass that ID into this function when they are
-    // disposed; this ensures that multiple tangram instances on multiple threads can all
-    // safely dispose their GL resources on the same thread that created them.
 }
 
 void setDebugFlag(DebugFlags _flag, bool _on) {
