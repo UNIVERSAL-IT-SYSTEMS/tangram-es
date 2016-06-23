@@ -74,6 +74,11 @@ public class MapView extends FrameLayout {
                 callback.onMapReady(mapController);
             }
 
+            @Override
+            protected void onCancelled(Boolean ok) {
+                mapController.dispose();
+            }
+
         }.execute();
 
     }
@@ -94,14 +99,19 @@ public class MapView extends FrameLayout {
     protected void disposeMap() {
 
         if (getMapTask != null) {
+            // MapController is being initialized, so we'll dispose it in the onCancelled callback.
             getMapTask.cancel(true);
-        }
-        getMapTask = null;
-
-        if (mapController != null) {
-            mapController.dispose();
+        } else if (mapController != null) {
+            // MapController has been initialized, so we'll dispose it now on the GL thread.
+            mapController.queueEvent(new Runnable() {
+                @Override
+                public void run() {
+                    mapController.dispose();
+                }
+            });
         }
         mapController = null;
+        getMapTask = null;
 
     }
 

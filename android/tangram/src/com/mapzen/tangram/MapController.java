@@ -749,6 +749,12 @@ public class MapController implements Renderer {
         float delta = (newTime - time) / 1000000000.0f;
         time = newTime;
 
+        if (mapPointer <= 0) {
+            // No native instance is initialized, so stop here. This can happen during Activity
+            // shutdown when the map has been disposed but the View hasn't been destroyed yet.
+            return;
+        }
+
         boolean viewComplete = nativeUpdate(mapPointer, delta);
         nativeRender(mapPointer);
 
