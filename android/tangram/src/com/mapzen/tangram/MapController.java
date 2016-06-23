@@ -777,9 +777,6 @@ public class MapController implements Renderer {
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-        // nativeInit(this, assetManager, scenePath);
-        // nativeInit() is safe to call twice, this invocation ensures that the jni
-        // environment is attached to the rendering thread
         nativeSetupGL(mapPointer);
     }
 
@@ -801,7 +798,6 @@ public class MapController implements Renderer {
             @Override
             public void onFailure(Request request, IOException e) {
                 nativeOnUrlFailure(callbackPtr);
-                //e.printStackTrace();
             }
 
             @Override
