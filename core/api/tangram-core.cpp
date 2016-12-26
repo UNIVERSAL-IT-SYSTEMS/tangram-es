@@ -60,7 +60,7 @@ bool isContinuousRendering() {
 }
 
 void initGLExtensions() {
-  Tangram::Hardware::supportsMapBuffer = false;
+  Tangram::Hardware::supportsMapBuffer = true;
 }
 
 std::string stringFromFile(const char* _path) {
