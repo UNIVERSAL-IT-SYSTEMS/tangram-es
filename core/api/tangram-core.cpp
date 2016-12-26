@@ -63,47 +63,52 @@ void initGLExtensions() {
   Tangram::Hardware::supportsMapBuffer = true;
 }
 
-std::string stringFromFile(const char* _path) {
-  std::string out;
-  if (!_path || strlen(_path) == 0) { return out; }
-
+size_t fileToVector(const char* _path, std::function<unsigned char*(const size_t)> resize) {
   std::ifstream resource(_path, std::ifstream::ate | std::ifstream::binary);
-
+  if (!resource.is_open()) {
+    resource.open("./" + std::string(_path), std::ifstream::ate | std::ifstream::binary);
+  }
+  if (!resource.is_open() && !resourceDirPathSaved.empty()) {
+    resource.open(resourceDirPathSaved + '/' + _path, std::ifstream::ate | std::ifstream::binary);
+  }
   if (!resource.is_open()) {
     logMsg("Failed to read file at path: %s\n", _path);
-    return out;
+    return 0;
   }
-
-  resource.seekg(0, std::ios::end);
-  out.resize(resource.tellg());
-  resource.seekg(0, std::ios::beg);
-  resource.read(&out[0], out.size());
+  size_t _size = resource.tellg();
+  resource.seekg(std::ifstream::beg);
+  unsigned char* cdata = resize(_size);
+  if (cdata != nullptr) {
+    resource.read((char*)cdata, _size);
+  }
   resource.close();
+  return _size;
+}
 
+std::string stringFromFile(const char* _path) {
+  std::string out;
+  fileToVector(_path, [&](const size_t sz)->unsigned char* {
+    if (sz> 0) {
+      out.resize(sz);
+      return (unsigned char*)&out[0];
+    }
+    return nullptr;
+  });
   return out;
 }
 
 unsigned char* bytesFromFile(const char* _path, size_t& _size) {
-    std::ifstream resource(_path, std::ifstream::ate | std::ifstream::binary);
-    if (!resource.is_open() && !resourceDirPathSaved.empty()) {
-        resource.open(resourceDirPathSaved + '/' + _path, std::ifstream::ate | std::ifstream::binary);
+  unsigned char* cdata = nullptr;
+  _size = 0;
+  fileToVector(_path, [&](const size_t sz)->unsigned char* {
+    _size = sz;
+    if (_size > 0) {
+      cdata = (unsigned char*)malloc(sizeof(char) * (_size));
+      return cdata;
     }
-    if (!resource.is_open()) {
-        logMsg("Failed to read file at path: %s\n", _path);
-        _size = 0;
-        return nullptr;
-    }
-
-    _size = resource.tellg();
-
-    resource.seekg(std::ifstream::beg);
-
-    char* cdata = (char*)malloc(sizeof(char) * (_size));
-
-    resource.read(cdata, _size);
-    resource.close();
-
-    return reinterpret_cast<unsigned char *>(cdata);
+    return nullptr;
+  });
+  return cdata;
 }
 
 #define DEFAULT "fonts/NotoSans-Regular.ttf"
