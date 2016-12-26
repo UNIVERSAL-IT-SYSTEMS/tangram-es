@@ -346,7 +346,7 @@ void init_main_window(bool recreate) {
 int main(int argc, char* argv[]) {
     std::thread fetcherThread(tangamUrlFetcherRunner);
     // Initialize cURL
-    tangramRegisterUrlFetcher(10, tangamUrlFetcherDefault, tangamUrlCancelerDefault);
+    tangramRegisterUrlFetcher(16, tangamUrlFetcherDefault, tangamUrlCancelerDefault);
 
     static bool keepRunning = true;
 
