@@ -136,14 +136,12 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
       tangramScreenPositionToLngLat(map, x, y, &p.longitude, &p.latitude);
       tangramLogMsg("pick feature\n");
 
-      tangramPickFeaturesAt(map, x, y, [](TangramTouchItemArray picks) {
-          tangramLogMsg("picked %d features\n", picks.size);
-          for (size_t i = 0; i < picks.size; ++i) {
-              TangramTouchItem touchItem = ((TangramTouchItem*)picks.data)[i];
-              TangramString properties = touchItem.properties;
-              std::string propertiesJSON((char*)properties.data, properties.size);
-              tangramLogMsg(" - %f\t [%f,%f] %s\n", touchItem.distance, touchItem.position[0], touchItem.position[1], propertiesJSON.c_str());
-          }
+      tangramPickFeaturesAt(map, x, y, [](TangramTouchItem* pick) {
+          TangramTouchItem touchItem = *pick;
+          TangramString properties = touchItem.properties;
+          std::string propertiesJSON((char*)properties.data, properties.size);
+          tangramLogMsg(" Touch - [%f,%f] %s\n", touchItem.position[0], touchItem.position[1], propertiesJSON.c_str());
+          tangramTouchItemDestroy(pick);
       });
     }
     if ((mods & GLFW_MOD_SHIFT) && (action == GLFW_RELEASE)) {
@@ -238,7 +236,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
                 tangramToggleDebugFlag(TangramDebugFlagTangramStats);
                 break;
             case GLFW_KEY_R:
-                tangramLoadSceneAsync(map, sceneFile.c_str(), true, nullptr, nullptr);
+                tangramLoadSceneAsync(map, sceneFile.c_str(), false, nullptr, nullptr);
                 break;
             case GLFW_KEY_E:
                 if (scene_editing_mode) {
@@ -250,7 +248,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
                     tangramSetContinuousRendering(true);
                     glfwSwapInterval(1);
                 }
-                tangramLoadSceneAsync(map, sceneFile.c_str(), true, nullptr, nullptr);
+                tangramLoadSceneAsync(map, sceneFile.c_str(), false, nullptr, nullptr);
                 break;
             case GLFW_KEY_BACKSPACE:
                 recreate_context = true;
@@ -266,7 +264,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
                 } else {
                     pixel_scale = 1.0;
                 }
-                tangramLoadSceneAsync(map, sceneFile.c_str(), true, nullptr, nullptr);
+                tangramLoadSceneAsync(map, sceneFile.c_str(), false, nullptr, nullptr);
                 tangramSetPixelScale(map, pixel_scale);
 
                 break;
@@ -348,7 +346,7 @@ void init_main_window(bool recreate) {
 int main(int argc, char* argv[]) {
     std::thread fetcherThread(tangamUrlFetcherRunner);
     // Initialize cURL
-    tangramRegisterUrlFetcher(3, tangamUrlFetcherDefault, tangamUrlCancelerDefault);
+    tangramRegisterUrlFetcher(10, tangamUrlFetcherDefault, tangamUrlCancelerDefault);
 
     static bool keepRunning = true;
 
@@ -430,7 +428,7 @@ int main(int argc, char* argv[]) {
         if (scene_editing_mode) {
             //if (stat(sceneFile.c_str(), &sb) == 0) {
                 if (last_mod != sb.st_mtime) {
-                    tangramLoadSceneAsync(map, sceneFile.c_str(), true, nullptr, nullptr);
+                    tangramLoadSceneAsync(map, sceneFile.c_str(), false, nullptr, nullptr);
                     last_mod = sb.st_mtime;
                 }
             //}

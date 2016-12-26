@@ -71,10 +71,7 @@ typedef TangramPointerArray TangramString; // data is char*
 typedef struct TangramTouchItem {
     TangramString properties; // JSON string
     float position[2];
-    float distance;
 } TangramTouchItem;
-
-typedef TangramPointerArray TangramTouchItemArray; // data is TangramTouchItem
 
 // Init, working & finish functions
 TANGRAM_CORE_EXPORT void tangramInit(tangram_function_t render);
@@ -229,7 +226,8 @@ TANGRAM_CORE_EXPORT void tangramHandleShoveGesture(tangram_map_t map, float _dis
 // efficiency, but can cause errors if your application code makes OpenGL calls (false by default)
 TANGRAM_CORE_EXPORT void tangramUseCachedGlState(tangram_map_t map, bool _use);
 
-TANGRAM_CORE_EXPORT void tangramPickFeaturesAt(tangram_map_t map, float _x, float _y, void(*)(TangramTouchItemArray));
+TANGRAM_CORE_EXPORT void tangramPickFeaturesAt(tangram_map_t map, float _x, float _y, void(*)(TangramTouchItem*));
+TANGRAM_CORE_EXPORT void tangramTouchItemDestroy(TangramTouchItem* item);
 
 // Run this task asynchronously to Tangram's main update loop.
 TANGRAM_CORE_EXPORT void tangramRunAsyncTask(tangram_map_t map, tangram_function_t _task);

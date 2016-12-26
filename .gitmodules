@@ -21,7 +21,7 @@
 	url = https://github.com/tangrams/duktape.git
 [submodule "external/yaml-cpp"]
 	path = external/yaml-cpp
-	url = https://github.com/tangrams/yaml-cpp
+	url = https://github.com/lygstate/yaml-cpp
 [submodule "external/glfw"]
 	path = external/glfw
 	url = https://github.com/glfw/glfw

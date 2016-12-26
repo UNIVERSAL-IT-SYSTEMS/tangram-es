@@ -15,6 +15,7 @@
 #include "tangram-core.h"
 #include "tangram.h"
 #include "platform.h"
+#include "gl/hardware.h"
 
 #include "urlGet.h"
 #include "data/clientGeoJsonSource.h"
@@ -59,16 +60,27 @@ bool isContinuousRendering() {
 }
 
 void initGLExtensions() {
+  Tangram::Hardware::supportsMapBuffer = false;
 }
 
 std::string stringFromFile(const char* _path) {
-    size_t length = 0;
-    unsigned char* bytes = bytesFromFile(_path, length);
+  std::string out;
+  if (!_path || strlen(_path) == 0) { return out; }
 
-    std::string out(reinterpret_cast<char*>(bytes), length);
-    free(bytes);
+  std::ifstream resource(_path, std::ifstream::ate | std::ifstream::binary);
 
+  if (!resource.is_open()) {
+    logMsg("Failed to read file at path: %s\n", _path);
     return out;
+  }
+
+  resource.seekg(0, std::ios::end);
+  out.resize(resource.tellg());
+  resource.seekg(0, std::ios::beg);
+  resource.read(&out[0], out.size());
+  resource.close();
+
+  return out;
 }
 
 unsigned char* bytesFromFile(const char* _path, size_t& _size) {
@@ -94,15 +106,27 @@ unsigned char* bytesFromFile(const char* _path, size_t& _size) {
     return reinterpret_cast<unsigned char *>(cdata);
 }
 
-// No system fonts implementation (yet!)
-std::string systemFontPath(const std::string& _name, const std::string& _weight,
-    const std::string& _face) {
-    return "";
+#define DEFAULT "fonts/NotoSans-Regular.ttf"
+#define FONT_AR "fonts/NotoNaskh-Regular.ttf"
+#define FONT_HE "fonts/NotoSansHebrew-Regular.ttf"
+#define FONT_JA "fonts/DroidSansJapanese.ttf"
+#define FALLBACK "fonts/DroidSansFallback.ttf"
+std::vector<FontSourceHandle> systemFontFallbacksHandle() {
+  std::vector<FontSourceHandle> handles;
+  handles.emplace_back(DEFAULT);
+  handles.emplace_back(FONT_AR);
+  handles.emplace_back(FONT_HE);
+  handles.emplace_back(FONT_JA);
+  handles.emplace_back(FALLBACK);
+  return handles;
 }
 
-// No system fonts fallback implementation (yet!)
-std::string systemFontFallbackPath(int _importance, int _weightHint) {
-    return "";
+unsigned char* systemFont(const std::string& _name, const std::string& _weight, const std::string& _face, size_t* _size) {
+  std::string path = "";
+
+  if (path.empty()) { return nullptr; }
+
+  return bytesFromFile(path.c_str(), *_size);
 }
 
 bool startUrlRequest(const std::string& _url, UrlCallback _callback) {
@@ -521,29 +545,27 @@ TANGRAM_CORE_EXPORT void tangramUseCachedGlState(tangram_map_t map, bool _use) {
     return ((Tangram::Map*)map)->useCachedGlState(_use);
 }
 
-TANGRAM_CORE_EXPORT void tangramPickFeaturesAt(tangram_map_t map, float _x, float _y, void(*callback)(TangramTouchItemArray)) {
-    ((Tangram::Map*)map)->pickFeaturesAt(_x, _y, [=](const std::vector<Tangram::TouchItem>& features) {
-        TangramPointerArray planeFeatures = { nullptr, 0 };
-        planeFeatures.size = features.size();
-        auto items = (TangramTouchItem*)malloc(planeFeatures.size * sizeof(TangramTouchItem));
-        if (planeFeatures.size == 0) {
-            free(items);
-            planeFeatures.data = nullptr;
-        } else {
-            planeFeatures.data = items;
-        }
-        for (size_t i = 0; i < features.size(); ++i) {
-            auto &feature = features[i];
-            auto &item = items[i];
-            item.distance = feature.distance;
-            memcpy(item.position, feature.position, sizeof(feature.position));
-            std::string jsonString = feature.properties->toJson();
-            item.properties.size = jsonString.length();
-            item.properties.data = malloc(jsonString.length());
-            memcpy(item.properties.data, jsonString.data(), item.properties.size);
-        }
-        callback(planeFeatures);
-    });
+TANGRAM_CORE_EXPORT void tangramPickFeaturesAt(tangram_map_t map, float _x, float _y, void(*callback)(TangramTouchItem*)) {
+  ((Tangram::Map*)map)->pickFeatureAt(_x, _y, [=](const Tangram::FeaturePickResult* featurePtr) {
+    const Tangram::FeaturePickResult &feature = *featurePtr;
+      TangramPointerArray planeFeatures = { nullptr, 0 };
+    auto itemPtr = (TangramTouchItem*)malloc(sizeof(TangramTouchItem));
+    auto &item = *itemPtr;
+    item.position[0] = feature.position[0];
+    item.position[1] = feature.position[0];
+    std::string jsonString = feature.properties->toJson();
+    item.properties.size = jsonString.length();
+    item.properties.data = malloc(jsonString.length());
+    memcpy(item.properties.data, jsonString.data(), item.properties.size);
+    callback(itemPtr);
+  });
+}
+
+TANGRAM_CORE_EXPORT void tangramTouchItemDestroy(TangramTouchItem* item) {
+  if (item) {
+    free(item->properties.data);
+    free(item);
+  }
 }
 
 // Run this task asynchronously to Tangram's main update loop.
@@ -566,11 +588,6 @@ TANGRAM_CORE_EXPORT void tangramDataSourceAddGeoJSON(tangram_data_source_t sourc
   } else {
     geoJsonSource->addData(std::string(json, json_length));
   }
-}
-
-TANGRAM_CORE_EXPORT void tangramDataSourceRemoveFeature(tangram_data_source_t source, uint32_t featureId) {
-  auto geoJsonSource = (Tangram::ClientGeoJsonSource*)source;
-  geoJsonSource->removeFeature(featureId);
 }
 
 TANGRAM_CORE_EXPORT void tangramDataSourceSetAttribute(tangram_data_source_t source, const char*json, size_t json_length) {
