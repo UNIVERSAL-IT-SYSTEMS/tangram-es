@@ -78,12 +78,13 @@ TANGRAM_CORE_EXPORT void tangramInit(tangram_function_t render);
 TANGRAM_CORE_EXPORT void tangramLogMsg(const char* fmt, ...);
 TANGRAM_CORE_EXPORT void tangramSetLogFile(FILE *file);
 
-TANGRAM_CORE_EXPORT void tangamSetResourceDir(const char* resourceDirPath);
+TANGRAM_CORE_EXPORT void tangramSetResourceDir(const char* resourceDirPath);
 
-TANGRAM_CORE_EXPORT void tangamUrlFetcherRunner();
-TANGRAM_CORE_EXPORT bool tangamUrlFetcherDefault(void* context, const char* url, tangram_url_fetch_callback_t callback);
-TANGRAM_CORE_EXPORT void tangamUrlCancelerDefault(const char*url);
-TANGRAM_CORE_EXPORT void tangamUrlFetcherStop();
+TANGRAM_CORE_EXPORT void tangramUrlFetcherRunnerStart();
+TANGRAM_CORE_EXPORT void tangramUrlFetcherRunnerWait();
+TANGRAM_CORE_EXPORT bool tangramUrlFetcherDefault(void* context, const char* url, tangram_url_fetch_callback_t callback);
+TANGRAM_CORE_EXPORT void tangramUrlCancelerDefault(const char*url);
+TANGRAM_CORE_EXPORT void tangramUrlFetcherStop();
 TANGRAM_CORE_EXPORT void tangramRegisterUrlFetcher(size_t parallelCount, tangram_url_fetch_t fetcher, tangram_url_fetch_cancel_t cancler);
 
 // Map

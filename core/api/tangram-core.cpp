@@ -11,11 +11,14 @@
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <memory>
+#include <future>
 
 #include "tangram-core.h"
 #include "tangram.h"
 #include "platform.h"
 #include "gl/hardware.h"
+#include "log.h"
 
 #include "urlGet.h"
 #include "data/clientGeoJsonSource.h"
@@ -29,6 +32,7 @@ tangram_url_fetch_cancel_t tangram_url_fetch_canceler= nullptr;
 std::string resourceDirPathSaved = "";
 FILE *logFile = nullptr;
 std::atomic_int tangramFetcherIsFinished;
+int fetch_url_worker_count = 1;
 }
 
 inline FILE* getLogFile() {
@@ -60,7 +64,6 @@ bool isContinuousRendering() {
 }
 
 void initGLExtensions() {
-  Tangram::Hardware::supportsMapBuffer = true;
 }
 
 size_t fileToVector(const char* _path, std::function<unsigned char*(const size_t)> resize) {
@@ -180,14 +183,17 @@ struct fetch_context {
 
 class Semaphore {
 public:
-    Semaphore(int count_ = 0)
-        : count(count_) {}
+    Semaphore(int count_ = 0, int max_count_ = 1)
+        : count(count_),
+        max_count(max_count_){}
 
     inline void notify()
     {
         std::unique_lock<std::mutex> lock(mtx);
-        count++;
-        cv.notify_one();
+        if (count < max_count) {
+            count++;
+            cv.notify_one();
+        }
     }
 
     inline void wait()
@@ -204,46 +210,62 @@ private:
     std::mutex mtx;
     std::condition_variable cv;
     int count;
+    int max_count;
 };
-std::deque<fetch_context> fetch_contextes;
-std::unordered_set<std::string> pending_fetches;
-std::unordered_set<std::string> fetch_canceles;
-std::mutex fetch_contextes_mutex;
-Semaphore fetch_semaphore(0);
+
+class Fetcher {
+public:
+    Fetcher():
+        sema(0),
+        contextes(),
+        pendings(),
+        cancelles(),
+        mutex(){
+    }
+    ~Fetcher() {
+        thread->join();
+        thread.reset(0);
+    }
+    Semaphore sema;
+    std::deque<fetch_context> contextes;
+    std::unordered_set<std::string> pendings;
+    std::unordered_set<std::string> cancelles;
+    std::mutex mutex;
+    std::unique_ptr<std::thread> thread;
+};
+
+std::unique_ptr<Fetcher> fetcher;
 
 void fetch_contexts_add(const fetch_context& new_context) {
-    fetch_contextes_mutex.lock();
-    if (pending_fetches.find(new_context.url) == pending_fetches.end()) {
-        pending_fetches.insert(new_context.url);
-        fetch_contextes.push_back(new_context);
+    std::unique_lock<std::mutex> lock(fetcher->mutex);
+    if (fetcher->pendings.find(new_context.url) == fetcher->pendings.end()) {
+        fetcher->pendings.insert(new_context.url);
+        fetcher->contextes.push_back(new_context);
     }
-    fetch_contextes_mutex.unlock();
-    fetch_semaphore.notify();
+    fetcher->sema.notify();
 }
 
 bool fetch_contexts_get(fetch_context &context, bool &canceled) {
+    std::unique_lock<std::mutex> lock(fetcher->mutex);
     bool hasContext;
-    fetch_contextes_mutex.lock();
-    hasContext = !fetch_contextes.empty();
+    hasContext = !fetcher->contextes.empty();
     if (hasContext) {
-        context = fetch_contextes.front();
-        canceled = fetch_canceles.find(context.url) != fetch_canceles.end();
+        context = fetcher->contextes.front();
+        canceled = fetcher->cancelles.find(context.url) != fetcher->cancelles.end();
         if (canceled) {
-            fetch_canceles.erase(context.url);
+            fetcher->cancelles.erase(context.url);
         }
-        pending_fetches.erase(context.url);
-        fetch_contextes.pop_front();
+        fetcher->pendings.erase(context.url);
+        fetcher->contextes.pop_front();
     }
-    fetch_contextes_mutex.unlock();
     return hasContext;
 }
 
 void fetch_contexts_cancel(const std::string &url) {
-    fetch_contextes_mutex.lock();
-    if (pending_fetches.find(url) != pending_fetches.end()) {
-        fetch_canceles.insert(url);
+    std::unique_lock<std::mutex> lock(fetcher->mutex);
+    if (fetcher->pendings.find(url) != fetcher->pendings.end()) {
+        fetcher->cancelles.insert(url);
     }
-    fetch_contextes_mutex.unlock();
 }
 
 extern "C" {
@@ -263,43 +285,67 @@ TANGRAM_CORE_EXPORT void tangramSetLogFile(FILE *file) {
     logFile = file;
 }
 
-TANGRAM_CORE_EXPORT void tangamSetResourceDir(const char* resourceDirPath) {
+TANGRAM_CORE_EXPORT void tangramSetResourceDir(const char* resourceDirPath) {
     resourceDirPathSaved = resourceDirPath;
 }
 
-TANGRAM_CORE_EXPORT void tangamUrlFetcherRunner() {
-    std::vector<char> stream;
+void tangramUrlFetcherRunner() {
+    std::vector<char> fileStream;
     fetch_context context;
     bool canceled;
+    bool hasContext;
     tangramFetcherIsFinished = 0;
+    Semaphore urlWorkerSema(fetch_url_worker_count, fetch_url_worker_count);
     while (!tangramFetcherIsFinished.load()) {
-        bool hasContext = fetch_contexts_get(context, canceled);
-        if (hasContext) {
-            stream.resize(0);
-            if (!canceled) {
-                const std::string &url = context.url;
-                if (url.find("file:///") == 0) {
-                    readFile(url.substr(strlen("file:///")), stream);
-                }
-                else {
-                    if (!urlGet(url, stream)) {
-                        stream.resize(0);
-                    }
-                }
-            }
-            else {
-                // Canceled, then callback with nothing
-            }
-            if (stream.size() > 0) {
-                context.callback(context.context, stream.data(), stream.size());
-            }
+        hasContext = fetch_contexts_get(context, canceled);
+        if (!hasContext) {
+            fetcher->sema.wait();
             continue;
         }
-        fetch_semaphore.wait();
+        if (canceled) {
+            // Canceled, then do not call the callback
+            continue;
+        }
+        const std::string &url = context.url;
+        if (url.find("file:///") == 0) {
+            fileStream.resize(0);
+            readFile(url.substr(strlen("file:///")), fileStream);
+            context.callback(context.context, fileStream.data(), fileStream.size());
+            continue;
+        }
+        auto future = std::async(std::launch::async, [&](fetch_context urlContext) {
+            try {
+                std::vector<char> urlStream;
+                if (!urlGet(urlContext.url, urlStream)) {
+                    urlStream.resize(0);
+                }
+                if (urlStream.size() > 0) {
+                    urlContext.callback(urlContext.context, urlStream.data(), urlStream.size());
+                    LOGW("Fetched %s", urlContext.url.c_str());
+                } else {
+                    LOGW("Fetched failed %s", urlContext.url.c_str());
+                }
+            } catch (...) {
+                LOGW("Fetched failed with exception %s", urlContext.url.c_str());
+            }
+            urlWorkerSema.notify();
+            return true;
+        }, context);
+        urlWorkerSema.wait();
     }
 }
 
-TANGRAM_CORE_EXPORT bool tangamUrlFetcherDefault(void* context, const char* url, tangram_url_fetch_callback_t callback) {
+TANGRAM_CORE_EXPORT void tangramUrlFetcherRunnerStart() {
+    fetcher.reset(new Fetcher());
+    fetcher->thread.reset(new std::thread(tangramUrlFetcherRunner));
+}
+
+TANGRAM_CORE_EXPORT void tangramUrlFetcherRunnerWait() {
+    fetcher.reset(0);
+}
+
+
+TANGRAM_CORE_EXPORT bool tangramUrlFetcherDefault(void* context, const char* url, tangram_url_fetch_callback_t callback) {
     fetch_context new_context = {
         context,
         url,
@@ -309,15 +355,16 @@ TANGRAM_CORE_EXPORT bool tangamUrlFetcherDefault(void* context, const char* url,
     return true;
 }
 
-TANGRAM_CORE_EXPORT void tangamUrlCancelerDefault(const char*url) {
+TANGRAM_CORE_EXPORT void tangramUrlCancelerDefault(const char*url) {
     fetch_contexts_cancel(url);
 }
 
-TANGRAM_CORE_EXPORT void tangamUrlFetcherStop() {
+TANGRAM_CORE_EXPORT void tangramUrlFetcherStop() {
     tangramFetcherIsFinished.store(1);
 }
 
 TANGRAM_CORE_EXPORT void tangramRegisterUrlFetcher(size_t urlWorkerCount, tangram_url_fetch_t fetcher, tangram_url_fetch_cancel_t canceler) {
+    fetch_url_worker_count = urlWorkerCount;
     tangram_url_fetcher = fetcher;
     tangram_url_fetch_canceler = canceler;
 }

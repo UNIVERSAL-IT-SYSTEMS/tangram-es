@@ -344,9 +344,9 @@ void init_main_window(bool recreate) {
 // ============
 
 int main(int argc, char* argv[]) {
-    std::thread fetcherThread(tangamUrlFetcherRunner);
     // Initialize cURL
-    tangramRegisterUrlFetcher(16, tangamUrlFetcherDefault, tangamUrlCancelerDefault);
+    tangramRegisterUrlFetcher(32, tangramUrlFetcherDefault, tangramUrlCancelerDefault);
+    tangramUrlFetcherRunnerStart();
 
     static bool keepRunning = true;
 
@@ -399,7 +399,6 @@ int main(int argc, char* argv[]) {
 
     // Loop until the user closes the window
     while (keepRunning && !glfwWindowShouldClose(main_window)) {
-
         double currentTime = glfwGetTime();
         double delta = currentTime - lastTime;
         lastTime = currentTime;
@@ -439,7 +438,7 @@ int main(int argc, char* argv[]) {
         tangramMapDestroy(map);
         map = nullptr;
     }
-    fetcherThread.join();
+    tangramUrlFetcherRunnerWait();
 
     glfwTerminate();
     return 0;
