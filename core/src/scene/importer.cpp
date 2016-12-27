@@ -281,10 +281,9 @@ void Importer::importScenesRecursive(Node& root, const Url& scenePath, std::vect
     }
 
     sceneStack.pop_back();
+    resolveSceneUrls(sceneNode, scenePath);
 
     mergeMapFields(root, sceneNode);
-
-    resolveSceneUrls(root, scenePath);
 }
 
 void Importer::mergeMapFields(Node& target, const Node& import) {
