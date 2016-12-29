@@ -332,13 +332,13 @@ auto Stops::evalExpVec2(float _key) const -> glm::vec2 {
     if (frames.empty()) { return glm::vec2{0.f}; }
 
     auto upper = nearestHigherFrame(_key);
+    if (upper == frames.begin()) {
+        return upper->value.get<glm::vec2>();
+    }
     auto lower = upper - 1;
 
     if (upper == frames.end()) {
         return lower->value.get<glm::vec2>();
-    }
-    if (lower < frames.begin()) {
-        return upper->value.get<glm::vec2>();
     }
 
     double range = exp2(upper->key - lower->key) - 1.0;
