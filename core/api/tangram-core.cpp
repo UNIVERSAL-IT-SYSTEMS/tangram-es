@@ -290,7 +290,6 @@ TANGRAM_CORE_EXPORT void tangramSetResourceDir(const char* resourceDirPath) {
 }
 
 void tangramUrlFetcherRunner() {
-    std::vector<char> fileStream;
     fetch_context context;
     bool canceled;
     bool hasContext;
@@ -304,19 +303,6 @@ void tangramUrlFetcherRunner() {
         }
         if (canceled) {
             // Canceled, then do not call the callback
-            continue;
-        }
-        const std::string &url = context.url;
-        if (url.find("file:///") == 0) {
-            fileStream.resize(0);
-            readFile(url.substr(strlen("file:///")), fileStream);
-            if (fileStream.size() > 0) {
-                context.callback(context.context, fileStream.data(), fileStream.size());
-                LOGW("Fetched for %s %d", context.url.c_str(), (int)fileStream.size());
-            } else {
-                context.callback(context.context, nullptr, 0);
-                LOGW("Fetched failed for %s", context.url.c_str());
-            }
             continue;
         }
         urlWorkerSema.wait();
@@ -353,10 +339,25 @@ TANGRAM_CORE_EXPORT void tangramUrlFetcherRunnerWaitStop() {
 }
 
 
-TANGRAM_CORE_EXPORT bool tangramUrlFetcherDefault(void* context, const char* url, tangram_url_fetch_callback_t callback) {
+TANGRAM_CORE_EXPORT bool tangramUrlFetcherDefault(void* context, const char* urlStr, tangram_url_fetch_callback_t callback) {
+    std::vector<char> fileStream;
+    const std::string url = urlStr;
+    if (url.find("file:///") == 0) {
+        fileStream.resize(0);
+        readFile(url.substr(strlen("file:///")), fileStream);
+        if (fileStream.size() > 0) {
+            callback(context, fileStream.data(), fileStream.size());
+            LOGW("Fetched for %s %d", urlStr, (int)fileStream.size());
+            return true;
+        } else {
+            callback(context, nullptr, 0);
+            LOGW("Fetched failed for %s", urlStr);
+            return true;
+        }
+    }
     fetch_context new_context = {
         context,
-        url,
+        urlStr,
         callback
     };
     fetch_contexts_add(new_context);
