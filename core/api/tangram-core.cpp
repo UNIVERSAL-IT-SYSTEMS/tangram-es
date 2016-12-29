@@ -146,6 +146,7 @@ bool startUrlRequest(const std::string& _url, UrlCallback _callback) {
             std::vector<char> vec(buffer, buffer + sz);
             callback(std::move(vec));
         });
+        return false;
     } else {
         return false;
     }

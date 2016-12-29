@@ -210,77 +210,88 @@ void scroll_callback(GLFWwindow* window, double scrollx, double scrolly) {
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     if (action == GLFW_PRESS) {
-        switch (key) {
-            case GLFW_KEY_1:
-                tangramToggleDebugFlag(TangramDebugFlagFreezeTiles);
+        if ((mods & GLFW_MOD_CONTROL)) {
+            switch (key) {
+            case GLFW_KEY_EQUAL:
+                tangramSetZoom(map, tangramGetZoom(map) * 1.5);
                 break;
-            case GLFW_KEY_2:
-                tangramToggleDebugFlag(TangramDebugFlagProxyColors);
+            case GLFW_KEY_MINUS:
+                tangramSetZoom(map, tangramGetZoom(map) / 1.5);
                 break;
-            case GLFW_KEY_3:
-                tangramToggleDebugFlag(TangramDebugFlagTileBounds);
-                break;
-            case GLFW_KEY_4:
-                tangramToggleDebugFlag(TangramDebugFlagTileInfos);
-                break;
-            case GLFW_KEY_5:
-                tangramToggleDebugFlag(TangramDebugFlagLabels);
-                break;
-            case GLFW_KEY_6:
-                tangramToggleDebugFlag(TangramDebugFlagDrawAllLabels);
-                break;
-            case GLFW_KEY_7:
-                tangramToggleDebugFlag(TangramDebugFlagTangramInfos);
-                break;
-            case GLFW_KEY_8:
-                tangramToggleDebugFlag(TangramDebugFlagTangramStats);
-                break;
-            case GLFW_KEY_R:
-                tangramLoadSceneAsync(map, sceneFile.c_str(), false, nullptr, nullptr);
-                break;
-            case GLFW_KEY_E:
-                if (scene_editing_mode) {
-                    scene_editing_mode = false;
-                    tangramSetContinuousRendering(false);
-                    glfwSwapInterval(0);
-                } else {
-                    scene_editing_mode = true;
-                    tangramSetContinuousRendering(true);
-                    glfwSwapInterval(1);
-                }
-                tangramLoadSceneAsync(map, sceneFile.c_str(), false, nullptr, nullptr);
-                break;
-            case GLFW_KEY_BACKSPACE:
-                recreate_context = true;
-                break;
-            case GLFW_KEY_N:
-                tangramSetRotationEased(map, tangramGetRotation(map) + 3.14/8, 1.f, TangramEaseQuint);
-                break;
-            case GLFW_KEY_S:
-                if (pixel_scale == 1.0) {
-                    pixel_scale = 2.0;
-                } else if (pixel_scale == 2.0) {
-                    pixel_scale = 0.75;
-                } else {
-                    pixel_scale = 1.0;
-                }
-                tangramLoadSceneAsync(map, sceneFile.c_str(), false, nullptr, nullptr);
-                tangramSetPixelScale(map, pixel_scale);
+            }
+        }
 
-                break;
-            case GLFW_KEY_P:
-                tangramQueueSceneUpdate(map, "cameras", "{ main_camera: { type: perspective } }");
-                tangramApplySceneUpdates(map);
-                break;
-            case GLFW_KEY_I:
-                tangramQueueSceneUpdate(map, "cameras", "{ main_camera: { type: isometric } }");
-                tangramApplySceneUpdates(map);
-                break;
-            case GLFW_KEY_ESCAPE:
-                glfwSetWindowShouldClose(main_window, true);
-                break;
-            default:
-                break;
+        switch (key) {
+        case GLFW_KEY_1:
+            tangramToggleDebugFlag(TangramDebugFlagFreezeTiles);
+            break;
+        case GLFW_KEY_2:
+            tangramToggleDebugFlag(TangramDebugFlagProxyColors);
+            break;
+        case GLFW_KEY_3:
+            tangramToggleDebugFlag(TangramDebugFlagTileBounds);
+            break;
+        case GLFW_KEY_4:
+            tangramToggleDebugFlag(TangramDebugFlagTileInfos);
+            break;
+        case GLFW_KEY_5:
+            tangramToggleDebugFlag(TangramDebugFlagLabels);
+            break;
+        case GLFW_KEY_6:
+            tangramToggleDebugFlag(TangramDebugFlagDrawAllLabels);
+            break;
+        case GLFW_KEY_7:
+            tangramToggleDebugFlag(TangramDebugFlagTangramInfos);
+            break;
+        case GLFW_KEY_8:
+            tangramToggleDebugFlag(TangramDebugFlagTangramStats);
+            break;
+        case GLFW_KEY_R:
+            tangramLoadSceneAsync(map, sceneFile.c_str(), false, nullptr, nullptr);
+            break;
+        case GLFW_KEY_E:
+            if (scene_editing_mode) {
+                scene_editing_mode = false;
+                tangramSetContinuousRendering(false);
+                glfwSwapInterval(0);
+            } else {
+                scene_editing_mode = true;
+                tangramSetContinuousRendering(true);
+                glfwSwapInterval(1);
+            }
+            tangramLoadSceneAsync(map, sceneFile.c_str(), false, nullptr, nullptr);
+            break;
+        case GLFW_KEY_BACKSPACE:
+            recreate_context = true;
+            break;
+        case GLFW_KEY_N:
+            tangramSetRotationEased(map, tangramGetRotation(map) + 3.14/8, 1.f, TangramEaseQuint);
+            break;
+        case GLFW_KEY_S:
+            if (pixel_scale == 1.0) {
+                pixel_scale = 2.0;
+            } else if (pixel_scale == 2.0) {
+                pixel_scale = 0.75;
+            } else {
+                pixel_scale = 1.0;
+            }
+            tangramLoadSceneAsync(map, sceneFile.c_str(), false, nullptr, nullptr);
+            tangramSetPixelScale(map, pixel_scale);
+
+            break;
+        case GLFW_KEY_P:
+            tangramQueueSceneUpdate(map, "cameras", "{ main_camera: { type: perspective } }");
+            tangramApplySceneUpdates(map);
+            break;
+        case GLFW_KEY_I:
+            tangramQueueSceneUpdate(map, "cameras", "{ main_camera: { type: isometric } }");
+            tangramApplySceneUpdates(map);
+            break;
+        case GLFW_KEY_ESCAPE:
+            glfwSetWindowShouldClose(main_window, true);
+            break;
+        default:
+            break;
         }
     }
 }
@@ -317,6 +328,7 @@ void init_main_window(bool recreate) {
         glfwWindowHint(GLFW_SAMPLES, 2);
         main_window = glfwCreateWindow(width, height, "Tangram ES", NULL, NULL);
         if (!main_window) {
+            printf("glfw created failed\n");
             glfwTerminate();
         }
 
@@ -378,7 +390,7 @@ int main(int argc, char* argv[]) {
 #if USING_OPENGL_ES
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
     glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_EGL_CONTEXT_API);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 #else
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
