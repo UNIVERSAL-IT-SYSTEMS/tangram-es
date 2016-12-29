@@ -438,7 +438,7 @@ int main(int argc, char* argv[]) {
         tangramMapDestroy(map);
         map = nullptr;
     }
-    tangramUrlFetcherRunnerWait();
+    tangramUrlFetcherRunnerWaitStop();
 
     glfwTerminate();
     return 0;

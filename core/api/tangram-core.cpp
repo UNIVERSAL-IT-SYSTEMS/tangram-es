@@ -310,9 +310,16 @@ void tangramUrlFetcherRunner() {
         if (url.find("file:///") == 0) {
             fileStream.resize(0);
             readFile(url.substr(strlen("file:///")), fileStream);
-            context.callback(context.context, fileStream.data(), fileStream.size());
+            if (fileStream.size() > 0) {
+                context.callback(context.context, fileStream.data(), fileStream.size());
+                LOGW("Fetched for %s %d", context.url.c_str(), (int)fileStream.size());
+            } else {
+                context.callback(context.context, nullptr, 0);
+                LOGW("Fetched failed for %s", context.url.c_str());
+            }
             continue;
         }
+        urlWorkerSema.wait();
         auto future = std::async(std::launch::async, [&](fetch_context urlContext) {
             try {
                 std::vector<char> urlStream;
@@ -331,7 +338,6 @@ void tangramUrlFetcherRunner() {
             urlWorkerSema.notify();
             return true;
         }, context);
-        urlWorkerSema.wait();
     }
 }
 
@@ -340,7 +346,9 @@ TANGRAM_CORE_EXPORT void tangramUrlFetcherRunnerStart() {
     fetcher->thread.reset(new std::thread(tangramUrlFetcherRunner));
 }
 
-TANGRAM_CORE_EXPORT void tangramUrlFetcherRunnerWait() {
+TANGRAM_CORE_EXPORT void tangramUrlFetcherRunnerWaitStop() {
+    tangramFetcherIsFinished.store(1);
+    fetcher->thread->join();
     fetcher.reset(0);
 }
 
@@ -357,10 +365,6 @@ TANGRAM_CORE_EXPORT bool tangramUrlFetcherDefault(void* context, const char* url
 
 TANGRAM_CORE_EXPORT void tangramUrlCancelerDefault(const char*url) {
     fetch_contexts_cancel(url);
-}
-
-TANGRAM_CORE_EXPORT void tangramUrlFetcherStop() {
-    tangramFetcherIsFinished.store(1);
 }
 
 TANGRAM_CORE_EXPORT void tangramRegisterUrlFetcher(size_t urlWorkerCount, tangram_url_fetch_t fetcher, tangram_url_fetch_cancel_t canceler) {
